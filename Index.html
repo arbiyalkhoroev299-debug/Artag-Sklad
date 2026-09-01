@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Склад кафеля</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f2f2f7; padding: 16px; margin: 0; color: #000; }
+    h2 { text-align: center; margin-top: 10px; margin-bottom: 16px; }
+    
+    .add-btn { width: 100%; background: #34c759; color: #fff; border: none; padding: 16px; border-radius: 12px; font-size: 17px; font-weight: 700; margin-bottom: 16px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .add-btn:active { background: #28a745; }
+
+    .search-box { width: 100%; padding: 14px; font-size: 16px; border: 2px solid #007aff; border-radius: 12px; background: #fff; margin-bottom: 16px; outline: none; -webkit-appearance: none; }
+    
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+    .tile-info { flex-grow: 1; padding-right: 10px; }
+    .tile-name { font-weight: 600; font-size: 17px; color: #1c1c1e; }
+    .tile-meta { font-size: 13px; color: #8e8e93; margin-top: 4px; }
+    .location-badge { background: #007aff; color: #fff; font-weight: 700; font-size: 15px; padding: 8px 12px; border-radius: 8px; white-space: nowrap; text-align: center; }
+    
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-content { background: #fff; width: 90%; max-width: 400px; border-radius: 16px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); margin: auto; position: relative; top: 15%; }
+    .modal-title { font-weight: 700; font-size: 18px; margin-bottom: 14px; text-align: center; }
+    .modal label { display: block; font-size: 13px; color: #666; margin-top: 10px; }
+    .modal input { width: 100%; padding: 12px; margin-top: 4px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; background: #fafafa; }
+    
+    .btn-group { display: flex; gap: 10px; margin-top: 18px; }
+    .save-btn { flex: 2; background: #34c759; color: #fff; border: none; padding: 14px; border-radius: 10px; font-weight: 700; font-size: 16px; }
+    .cancel-btn { flex: 1; background: #8e8e93; color: #fff; border: none; padding: 14px; border-radius: 10px; font-weight: 600; font-size: 16px; }
+    
+    .del-btn { background: #ff3b30; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; margin-top: 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <h2>Склад кафеля 📦</h2>
+
+  <button type="button" class="add-btn" id="openModalBtn">➕ Добавить новую позицию</button>
+
+  <input type="text" id="search" class="search-box" placeholder="🔍 Введите название или место...">
+
+  <div id="tileList"></div>
+
+  <!-- Модальное окно -->
+  <div class="modal" id="addModal">
+    <div class="modal-content">
+      <div class="modal-title">Новая позиция</div>
+      
+      <label>Название / Коллекция</label>
+      <input type="text" id="inputName" placeholder="например, Carrara White">
+      
+      <label>Ряд / Место на складе</label>
+      <input type="text" id="inputLoc" placeholder="например, Ряд 3, Полка B">
+      
+      <label>Размер или артикул (необязательно)</label>
+      <input type="text" id="inputMeta" placeholder="например, 60x60">
+      
+      <div class="btn-group">
+        <button type="button" class="save-btn" id="saveItemBtn">Сохранить</button>
+        <button type="button" class="cancel-btn" id="closeModalBtn">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var defaultData = [
+      { id: 1, name: "Marble Classic", loc: "Ряд 1, Полка А", meta: "60x60 см" },
+      { id: 2, name: "Loft Concrete", loc: "Ряд 2, Полка Б", meta: "30x60 см" },
+      { id: 3, name: "Wood Oak Light", loc: "Ряд 4, Стеллаж 3", meta: "15x60 см" }
+    ];
+
+    function getTiles() {
+      try {
+        var saved = localStorage.getItem('sklad_tiles_v3');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+      return defaultData;
+    }
+
+    function saveTiles(data) {
+      try {
+        localStorage.setItem('sklad_tiles_v3', JSON.stringify(data));
+      } catch (e) {
+        alert("Ошибка сохранения в память!");
+      }
+      renderList();
+    }
+
+    function openModal() {
+      document.getElementById('inputName').value = '';
+      document.getElementById('inputLoc').value = '';
+      document.getElementById('inputMeta').value = '';
+      document.getElementById('addModal').style.display = 'block';
+    }
+
+    function closeModal() {
+      document.getElementById('addModal').style.display = 'none';
+    }
+
+    function saveNewItem() {
+      var name = document.getElementById('inputName').value.trim();
+      var loc = document.getElementById('inputLoc').value.trim();
+      var meta = document.getElementById('inputMeta').value.trim();
+
+      if (!name || !loc) {
+        alert("Заполните Название и Место!");
+        return;
+      }
+
+      var tiles = getTiles();
+      tiles.unshift({
+        id: Date.now(),
+        name: name,
+        loc: loc,
+        meta: meta || "—"
+      });
+
+      saveTiles(tiles);
+      closeModal();
+    }
+
+    function deleteItem(id) {
+      if (confirm("Удалить эту позицию?")) {
+        var tiles = getTiles().filter(function(item) {
+          return item.id !== id;
+        });
+        saveTiles(tiles);
+      }
+    }
+
+    function renderList() {
+      var query = document.getElementById('search').value.toLowerCase();
+      var tiles = getTiles();
+      var container = document.getElementById('tileList');
+      container.innerHTML = '';
+
+      var filtered = tiles.filter(function(t) {
+        return t.name.toLowerCase().indexOf(query) !== -1 || 
+               t.meta.toLowerCase().indexOf(query) !== -1 ||
+               t.loc.toLowerCase().indexOf(query) !== -1;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="text-align:center; color:#8e8e93; padding:30px;">Ничего не найдено</div>';
+        return;
+      }
+
+      for (var i = 0; i < filtered.length; i++) {
+        var item = filtered[i];
+        var card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = 
+          '<div class="tile-info">' +
+            '<div class="tile-name">' + item.name + '</div>' +
+            '<div class="tile-meta">' + item.meta + '</div>' +
+            '<button class="del-btn" onclick="deleteItem(' + item.id + ')">Удалить</button>' +
+          '</div>' +
+          '<div class="location-badge">' + item.loc + '</div>';
+        container.appendChild(card);
+      }
+    }
+
+    document.getElementById('openModalBtn').onclick = openModal;
+    document.getElementById('closeModalBtn').onclick = closeModal;
+    document.getElementById('saveItemBtn').onclick = saveNewItem;
+    document.getElementById('search').oninput = renderList;
+
+    renderList();
+  </script>
+</body>
+</html>
